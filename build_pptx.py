@@ -29,6 +29,10 @@ WHITE = "FFFFFF"
 SOFT_WHITE = "F5F7FB"
 INK = "0B1B3A"         # near-black for body text on light backgrounds
 
+# User-requested overrides for question slides
+QSLIDE_BG = "052F61"   # slide background for question slides
+QCARD_BG = "C7EA94"    # question-card fill (light green)
+
 
 def emu_inches(inches: float) -> int:
     return int(round(inches * EMU_PER_INCH))
@@ -693,11 +697,13 @@ def build_question_slide(
     hint: str,
     options,
 ) -> str:
-    bg = solid_bg_xml(SOFT_WHITE)
+    bg = solid_bg_xml(QSLIDE_BG)
     shapes = []
 
-    # ---- Top header band (navy) ----
-    shapes.append(rect_shape(10, "HeaderBand", 0, 0, 13.333, 1.05, NAVY))
+    # ---- Top header band ----
+    # Use NAVY_DEEP so the header is still distinguishable from the slightly
+    # lighter QSLIDE_BG behind it.
+    shapes.append(rect_shape(10, "HeaderBand", 0, 0, 13.333, 1.05, NAVY_DEEP))
     # Gold accent strip below header
     shapes.append(rect_shape(11, "HeaderAccent", 0, 1.05, 13.333, 0.08, GOLD))
 
@@ -732,87 +738,74 @@ def build_question_slide(
         anchor="ctr",
     ))
 
-    # ---- Question card ----
-    card_x, card_y, card_w, card_h = 0.7, 2.05, 11.93, 3.5
+    # ---- Question card (light green) ----
+    # Expanded to fill the body area now that the answer band/footer are gone.
+    card_x, card_y, card_w, card_h = 0.4, 1.95, 12.533, 5.35
     shapes.append(round_rect_shape(
-        18, "QCard", card_x, card_y, card_w, card_h, WHITE,
+        18, "QCard", card_x, card_y, card_w, card_h, QCARD_BG,
         line_color=GOLD, line_w=19050,
     ))
 
     # Question icon - small gold square in the top-left of the card
-    shapes.append(round_rect_shape(19, "QBadge", card_x + 0.3, card_y + 0.3, 0.7, 0.7, GOLD))
+    shapes.append(round_rect_shape(19, "QBadge", card_x + 0.3, card_y + 0.3, 0.85, 0.85, GOLD))
     shapes.append(textbox_shape(
-        20, "QBadgeText", card_x + 0.3, card_y + 0.3, 0.7, 0.7,
-        _runs_from_lines(["Q"], size=3200, bold=True, color=NAVY_DEEP, align="ctr"),
+        20, "QBadgeText", card_x + 0.3, card_y + 0.3, 0.85, 0.85,
+        _runs_from_lines(["Q"], size=4000, bold=True, color=NAVY_DEEP, align="ctr"),
         anchor="ctr",
     ))
 
-    # Question text - split on existing newlines so we keep the original layout
+    # Layout heights inside the card depend on whether we have options/hint.
+    text_x = card_x + 1.4
+    text_w = card_w - 1.7
+
+    # Question text - 48pt, bold (per user request)
     q_lines = question_text.split("\n")
+    # Allocate more vertical space when there are no options
+    q_block_h = 2.2 if options else (3.4 if not hint else 2.8)
     shapes.append(textbox_shape(
         21, "QuestionText",
-        card_x + 1.2, card_y + 0.25, card_w - 1.6, 1.9,
-        _runs_from_lines(q_lines, size=2800, bold=False, color=INK,
-                         align="l", line_spacing=120),
+        text_x, card_y + 0.30, text_w, q_block_h,
+        _runs_from_lines(q_lines, size=4800, bold=True, color=INK,
+                         align="l", line_spacing=115),
         anchor="t",
     ))
 
-    # Hint (e.g. "(prepare)") in italics, just under the question
+    next_y = card_y + 0.30 + q_block_h
+
+    # Hint (e.g. "(prepare)") in italics, just below the question
     if hint:
         shapes.append(textbox_shape(
             22, "QHint",
-            card_x + 1.2, card_y + 2.1, card_w - 1.6, 0.5,
-            _runs_from_lines([hint], size=2000, italic=True, color=NAVY, align="l"),
+            text_x, next_y, text_w, 0.7,
+            _runs_from_lines([hint], size=2800, italic=True, bold=True,
+                             color=NAVY_DEEP, align="l"),
             anchor="t",
         ))
+        next_y += 0.7
 
     # Options area
     if options:
         # Heading: "Options:"
         shapes.append(textbox_shape(
             23, "OptHeading",
-            card_x + 1.2, card_y + 2.5, card_w - 1.6, 0.4,
-            _runs_from_lines(["Options"], size=1800, bold=True, color=GOLD, align="l"),
+            text_x, next_y, text_w, 0.5,
+            _runs_from_lines(["Options"], size=2400, bold=True,
+                             color=NAVY_DEEP, align="l"),
             anchor="t",
         ))
-        # Render options as bullet-style list
+        next_y += 0.5
+        # Render options as bullet-style list - 48pt bold per user request
         opt_lines = [f"\u25C6  {opt}" for opt in options]
+        opt_h = max(0.6, (card_y + card_h) - next_y - 0.2)
         shapes.append(textbox_shape(
             24, "OptList",
-            card_x + 1.2, card_y + 2.85, card_w - 1.6, card_h - 2.95,
-            _runs_from_lines(opt_lines, size=2000, color=INK,
-                             align="l", line_spacing=130),
+            text_x, next_y, text_w, opt_h,
+            _runs_from_lines(opt_lines, size=4800, bold=True, color=INK,
+                             align="l", line_spacing=120),
             anchor="t",
         ))
 
-    # ---- Answer band at bottom ----
-    ans_y = 5.85
-    shapes.append(round_rect_shape(
-        25, "AnswerBand", 0.7, ans_y, 11.93, 1.1, NAVY,
-    ))
-    shapes.append(rect_shape(26, "AnswerAccent", 0.7, ans_y, 0.18, 1.1, GOLD))
-    shapes.append(textbox_shape(
-        27, "AnswerLabel", 1.0, ans_y, 3.0, 1.1,
-        _runs_from_lines(["Answer:"], size=2800, bold=True, color=GOLD, align="l"),
-        anchor="ctr",
-    ))
-    shapes.append(textbox_shape(
-        28, "AnswerLine", 4.0, ans_y, 8.6, 1.1,
-        _runs_from_lines(["__________________________________"],
-                         size=2400, color=SOFT_WHITE, align="l"),
-        anchor="ctr",
-    ))
-
-    # Footer
-    shapes.append(textbox_shape(
-        29, "Footer", 0.5, 7.05, 12.333, 0.4,
-        _runs_from_lines([
-            f"Inter Branch English Grammar Quiz  \u2022  Class {class_name}  "
-            f"\u2022  {team_name}  \u2022  Round {round_num}"
-        ], size=1200, color=NAVY, align="ctr"),
-        anchor="ctr",
-    ))
-
+    # No answer band, no watermark footer (per user request).
     return _wrap_slide("".join(shapes), bg)
 
 
